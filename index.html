@@ -398,7 +398,7 @@
             const newPassword = String(val);
             if (!isInitialLoad && SYSTEM_PASSWORD !== newPassword) {
                 SYSTEM_PASSWORD = newPassword;
-                sessionStorage.removeItem('log_authenticated');
+                sessionStorage.removeItem('haengjeong_authenticated');
                 alert("⚠️ 원격에서 비밀번호가 변경되었습니다. 다시 로그인해 주세요.");
                 document.getElementById('sys-pass-input').value = '';
                 document.getElementById('login-overlay').style.display = 'flex';
@@ -413,7 +413,7 @@
     function checkSystemPassword() {
         const inputPass = document.getElementById('sys-pass-input').value;
         if (inputPass === SYSTEM_PASSWORD) {
-            sessionStorage.setItem('log_authenticated', 'true');
+            sessionStorage.setItem('haengjeong_authenticated', 'true');
             document.getElementById('login-overlay').style.display = 'none';
         } else {
             alert('⚠️ 비밀번호가 올바르지 않습니다.');
@@ -423,7 +423,7 @@
     }
 
     window.addEventListener('DOMContentLoaded', () => {
-        if (sessionStorage.getItem('log_authenticated') === 'true') {
+        if (sessionStorage.getItem('haengjeong_authenticated') === 'true') {
             document.getElementById('login-overlay').style.display = 'none';
         } else {
             document.getElementById('login-overlay').style.display = 'flex';
@@ -431,7 +431,6 @@
         }
     });
 
-    // ★ 구글 앱스 스크립트 웹 앱 URL (파이어베이스 연동 대신 다른 일지들과 동일한 Firebase Firestore 저장 방식으로 변경) ★
     const dbStore = firebase.firestore();
 
     const daysKor = ["일요일", "월요일", "화요일", "수요일", "목요일", "금요일", "토요일"];
@@ -561,7 +560,7 @@
         }
     }
 
-    // ★ 클라우드(Firebase Firestore) 저장 기능 연동 (CORS 에러 없이 즉시 저장됨) ★
+    // ★ 클라우드(Firebase Firestore) 저장 기능 연동 ★
     async function saveData() {
         document.getElementById("status-select").value = "일지완료";
 
@@ -610,11 +609,44 @@
         }
     }
 
-    // ★ 클라우드(Firebase Firestore) 데이터 불러오기 연동 ★
+    // ★ 클라우드(Firebase Firestore) 데이터 불러오기 연동 (날짜 변경 시 입력폼 및 근무자 초기화 방어 적용) ★
     async function loadSavedDataFromServer() {
         const workDate = document.getElementById("work-date").value;
         if (!workDate) return;
 
+        // 💡 1. 날짜 변경/조회 시 기존 근무자 입력폼 전체 초기화 (1행만 기본값, 나머지 빈칸)
+        const workerRows = document.querySelectorAll(".worker-row");
+        workerRows.forEach((row, idx) => {
+            row.querySelector(".w-name").value = (idx === 0) ? "이욱호" : "";
+            row.querySelector(".w-jugan").value = (idx === 0) ? "주간" : "";
+            row.querySelector(".w-yagan").value = "";
+            row.querySelector(".w-humu").value = "";
+            row.querySelector(".w-gita").value = "";
+        });
+
+        // 2. 업무 내용 텍스트 초기화
+        const textarea = document.getElementById("work-log-content");
+        if (textarea) {
+            textarea.value = "";
+            autoResizeTextarea(textarea);
+        }
+
+        // 3. 사진 초기화
+        for (let i = 1; i <= 3; i++) {
+            deletePhoto({ stopPropagation: () => {} }, i);
+        }
+
+        // 4. 결재란(서명) 초기화
+        ['img-damdang', 'img-team', 'img-sojang'].forEach((imgId, idx) => {
+            const btnIds = ['del-sign-damdang', 'del-sign-team', 'del-sign-sojang'];
+            const img = document.getElementById(imgId);
+            const delBtn = document.getElementById(btnIds[idx]);
+            img.removeAttribute('src');
+            img.style.display = "none";
+            delBtn.classList.remove('has-image');
+        });
+
+        // 5. 서버로부터 데이터 조회
         try {
             const doc = await dbStore.collection("haengjeong_work_logs").doc(workDate).get();
             if (doc.exists) {
@@ -624,7 +656,10 @@
                 if (data.userName) document.getElementById("user-name-input").value = data.userName;
                 if (data.dept) document.getElementById("dept-select").value = data.dept;
                 if (data.weather) document.getElementById("weather-select").value = data.weather;
-                if (data.logContent) document.getElementById("work-log-content").value = data.logContent;
+                if (data.logContent) {
+                    document.getElementById("work-log-content").value = data.logContent;
+                    autoResizeTextarea(document.getElementById("work-log-content"));
+                }
 
                 const roles = [
                     { key: 'imgDamdang', id: 'img-damdang', btn: 'del-sign-damdang' },
